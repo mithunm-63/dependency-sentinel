@@ -1,0 +1,21 @@
+spring:
+  application:
+    name: dependency-sentinel
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/dependency_sentinel}
+    username: ${DATABASE_USERNAME:postgres}
+    password: ${DATABASE_PASSWORD:postgres}
+    hikari:
+      maximum-pool-size: 5
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+server:
+  port: ${PORT:8081}
+spring.servlet.multipart:
+  max-file-size: 2MB
+  max-request-size: 2MB
