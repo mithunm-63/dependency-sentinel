@@ -10,12 +10,18 @@ function activeProjectId() {
 }
 
 function ensureProjectIds() {
-  document.querySelectorAll('.p4-project').forEach((button, index) => {
-    const buttons = [...document.querySelectorAll('.p4-project')];
-    const id = button.dataset.healthProjectId;
-    if (id) button.dataset.projectId = id;
-    else if (!button.dataset.projectId && buttons[index]) button.dataset.projectId = button.dataset.healthProjectId || '';
+  const buttons = [...document.querySelectorAll('.p4-project')];
+  buttons.forEach((button, index) => {
+    if (button.dataset.healthProjectId) button.dataset.projectId = button.dataset.healthProjectId;
+    else if (!button.dataset.projectId && buttons[index]?.dataset.healthProjectId) button.dataset.projectId = buttons[index].dataset.healthProjectId;
   });
+}
+
+function ensurePhase6Labels() {
+  const phase = document.querySelector('.p4-phase');
+  if (phase) phase.innerHTML = '<span /> Phase 6';
+  const footer = document.querySelector('.p4-footer');
+  if (footer && footer.textContent.includes('Phase 4')) footer.textContent = 'Phase 6 · GitHub integration & DevSecOps workflow';
 }
 
 function closeModal() {
@@ -42,7 +48,7 @@ function openModal() {
       <input class="p6-input" data-repo value="" placeholder="https://github.com/owner/repository" autocomplete="url" />
       <label class="p6-label">Branch <span>(leave empty for the repository default)</span></label>
       <input class="p6-input" data-branch value="" placeholder="main" autocomplete="off" />
-      <div class="p6-help">Only public GitHub repositories are supported in this phase. The root <code>pom.xml</code> must be present on the selected branch.</div>
+      <div class="p6-help">Only public GitHub repositories are supported in this phase. The repository root must contain <code>pom.xml</code>.</div>
       <div class="p6-status" data-status hidden></div>
       <div class="p6-actions">
         <button class="p6-btn" type="button" data-cancel>Cancel</button>
@@ -112,8 +118,10 @@ function ensureGitHubTab() {
 
 const observer = new MutationObserver(() => {
   ensureProjectIds();
+  ensurePhase6Labels();
   ensureGitHubTab();
 });
 observer.observe(document.body, { childList: true, subtree: true });
 ensureProjectIds();
+ensurePhase6Labels();
 ensureGitHubTab();
