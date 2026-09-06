@@ -10,6 +10,7 @@ import com.dependency.sentinel.project.Project;
 import com.dependency.sentinel.project.ProjectRepository;
 import com.dependency.sentinel.project.Scan;
 import com.dependency.sentinel.project.ScanRepository;
+import com.dependency.sentinel.security.OsVulnerabilityService;
 import org.apache.maven.model.Exclusion;
 import org.apache.maven.model.Model;
 import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
@@ -38,6 +39,7 @@ public class PomScannerService {
     private final DependencyEdgeRepository edgeRepository;
     private final RepositorySystem repositorySystem;
     private final RemoteRepository mavenCentralRepository;
+    private final OsVulnerabilityService vulnerabilityService;
 
     @Value("${dependency-scan.max-nodes:500}")
     private int maxNodes;
@@ -51,7 +53,8 @@ public class PomScannerService {
                              ResolvedDependencyRepository resolvedRepository,
                              DependencyEdgeRepository edgeRepository,
                              RepositorySystem repositorySystem,
-                             RemoteRepository mavenCentralRepository) {
+                             RemoteRepository mavenCentralRepository,
+                             OsVulnerabilityService vulnerabilityService) {
         this.projectRepository = projectRepository;
         this.dependencyRepository = dependencyRepository;
         this.scanRepository = scanRepository;
@@ -59,6 +62,7 @@ public class PomScannerService {
         this.edgeRepository = edgeRepository;
         this.repositorySystem = repositorySystem;
         this.mavenCentralRepository = mavenCentralRepository;
+        this.vulnerabilityService = vulnerabilityService;
     }
 
     @Transactional
@@ -70,6 +74,7 @@ public class PomScannerService {
         Scan scan = new Scan();
         scan.setProject(project);
         scan.setStatus("SCANNING");
+        scan.setSecurityStatus("NOT_CHECKED");
         scanRepository.saveAndFlush(scan);
 
         try (InputStream in = file.getInputStream()) {
@@ -136,14 +141,37 @@ public class PomScannerService {
             scan.setEdgeCount(edges.size());
             scan.setTransitiveCount(Math.max(0, savedNodes.size() - (int) directCount));
             scan.setTruncated(snapshot.truncated());
+
+            try {
+                OsVulnerabilityService.SecurityResult security = vulnerabilityService.scan(scan, savedNodes);
+                scan.setVulnerabilityCount(security.vulnerabilityCount());
+                scan.setCriticalCount(security.criticalCount());
+                scan.setHighCount(security.highCount());
+                scan.setMediumCount(security.mediumCount());
+                scan.setLowCount(security.lowCount());
+                scan.setSecurityScore(security.securityScore());
+                scan.setSecurityStatus("CHECKED");
+                if (security.capped()) {
+                    scan.setMessage(appendMessage(scan.getMessage(),
+                            "Security findings were capped for predictable scan time."));
+                }
+            } catch (Exception securityError) {
+                scan.setSecurityStatus("FAILED");
+                scan.setSecurityScore(null);
+                scan.setMessage(appendMessage(scan.getMessage(),
+                        "Dependency graph is ready, but vulnerability intelligence could not be retrieved from OSV."));
+            }
+
             scan.setStatus("READY");
-            scan.setMessage(snapshot.truncated()
-                    ? "Graph was capped for performance. Increase dependency-scan.max-nodes or max-depth for larger projects."
-                    : null);
+            if (scan.isTruncated()) {
+                scan.setMessage(appendMessage(scan.getMessage(),
+                        "Dependency graph was capped for performance. Increase dependency-scan.max-nodes or max-depth for larger projects."));
+            }
             return scanRepository.save(scan);
         } catch (Exception e) {
             scan.setStatus("FAILED");
             scan.setMessage(safeMessage(e));
+            scan.setSecurityStatus("FAILED");
             scanRepository.save(scan);
             throw e;
         }
@@ -257,6 +285,11 @@ public class PomScannerService {
 
     private String normalizeScope(String scope) {
         return scope == null || scope.isBlank() ? "compile" : scope;
+    }
+
+    private String appendMessage(String existing, String next) {
+        if (existing == null || existing.isBlank()) return next;
+        return existing + " " + next;
     }
 
     private String safeMessage(Exception e) {
