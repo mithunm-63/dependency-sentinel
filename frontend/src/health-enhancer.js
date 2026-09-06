@@ -61,11 +61,12 @@ function ensureProjectIds() {
 
 function promotePhaseLabel() {
   const pill = document.querySelector('.p4-phase');
-  if (pill) pill.innerHTML = '<span /> Phase 5';
+  if (pill && pill.textContent.trim() !== 'Phase 5') pill.innerHTML = '<span /> Phase 5';
   const footer = document.querySelector('.p4-footer');
-  if (footer) footer.textContent = 'Phase 5 · continuous project health, scan comparison & dependency drift';
+  const footerText = 'Phase 5 · continuous project health, scan comparison & dependency drift';
+  if (footer && footer.textContent !== footerText) footer.textContent = footerText;
   const welcomeKicker = document.querySelector('.p4-welcome .p4-eyebrow');
-  if (welcomeKicker) welcomeKicker.textContent = 'PHASE 5';
+  if (welcomeKicker && welcomeKicker.textContent.trim() !== 'PHASE 5') welcomeKicker.textContent = 'PHASE 5';
 }
 
 function listItems(items, type, emptyText) {
