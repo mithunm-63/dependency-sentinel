@@ -46,6 +46,8 @@ function activeProjectId() {
   const buttons = [...document.querySelectorAll('.p4-project')];
   const active = buttons.find(button => button.classList.contains('active'));
   if (!active) return null;
+  const directId = active.dataset.healthProjectId;
+  if (directId) return Number(directId);
   const index = buttons.indexOf(active);
   return projects[index]?.id ?? null;
 }
@@ -55,6 +57,15 @@ function ensureProjectIds() {
   buttons.forEach((button, index) => {
     if (projects[index]) button.dataset.healthProjectId = String(projects[index].id);
   });
+}
+
+function promotePhaseLabel() {
+  const pill = document.querySelector('.p4-phase');
+  if (pill) pill.innerHTML = '<span /> Phase 5';
+  const footer = document.querySelector('.p4-footer');
+  if (footer) footer.textContent = 'Phase 5 · continuous project health, scan comparison & dependency drift';
+  const welcomeKicker = document.querySelector('.p4-welcome .p4-eyebrow');
+  if (welcomeKicker) welcomeKicker.textContent = 'PHASE 5';
 }
 
 function listItems(items, type, emptyText) {
@@ -142,10 +153,12 @@ function closeModal() {
 }
 
 async function openHealth() {
-  const id = activeProjectId();
-  if (!id) return;
   closeModal();
   try {
+    projects = await getJson('/projects');
+    ensureProjectIds();
+    const id = activeProjectId();
+    if (!id) return;
     const data = await getJson(`/projects/${id}/health`);
     renderModal(data);
     document.body.appendChild(modal);
@@ -172,10 +185,12 @@ async function boot() {
   const observer = new MutationObserver(() => {
     ensureProjectIds();
     ensureHealthButton();
+    promotePhaseLabel();
   });
   observer.observe(document.body, { childList: true, subtree: true });
   ensureProjectIds();
   ensureHealthButton();
+  promotePhaseLabel();
 }
 
 boot();
