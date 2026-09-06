@@ -1,16 +1,34 @@
-# Dependency Sentinel — Phase 1
+# Dependency Sentinel — Phase 2
 
-Dependency Sentinel is a Java developer-security product that turns a Maven `pom.xml` into a clean, searchable dependency inventory.
+Dependency Sentinel is a Java developer-security product that turns a Maven `pom.xml` into a searchable dependency inventory and, in Phase 2, resolves the direct-to-transitive dependency graph.
 
-## Phase 1 flow
+## Phase 2 flow
 
-Create project → Upload pom.xml → Parse Maven dependencies → Store scan → Review dependency inventory
+```text
+Create project → Upload pom.xml → Resolve dependencies → Explore inventory/tree/graph
+```
+
+## What Phase 2 adds
+
+- Maven Resolver-backed transitive dependency collection
+- Direct vs. transitive classification
+- Dependency depth
+- Persistent scan snapshots
+- Parent/child dependency relationships
+- Searchable dependency inventory
+- Direct/transitive filtering
+- Expandable dependency tree
+- Interactive SVG dependency graph
+- Scan safety caps for very large projects
+
+The resolver uses Maven Central for dependency collection. Apache Maven documents `RepositorySystem.collectDependencies` as the operation that collects transitives and builds the dependency graph. Maven 3.9.11 is aligned with Maven Resolver 1.9.24.
 
 ## Stack
 
 - Backend: Java 21 + Spring Boot + Spring Data JPA
 - Database: PostgreSQL (Neon for hosted deployment)
-- Maven parser: Maven Model
+- Maven model: Maven 3.9.11
+- Maven Resolver: 1.9.24
 - Frontend: React + Vite
 - Local orchestration: Docker Compose
 
@@ -37,23 +55,7 @@ GitHub
   └── Render → backend/ → Neon PostgreSQL
 ```
 
-### 1. Create Neon PostgreSQL
-
-Create a PostgreSQL project in Neon and copy the connection details from the Neon dashboard. Keep SSL enabled.
-
-You will need:
-
-```text
-Host
-Port
-Database
-Username
-Password
-```
-
-### 2. Deploy backend to Render
-
-Create a Render Web Service from this repository with:
+### Render backend
 
 ```text
 Branch: main
@@ -63,21 +65,18 @@ Dockerfile: Dockerfile
 Health Check Path: /api/health
 ```
 
-Add these environment variables in Render:
+Environment variables:
 
 ```text
-DATABASE_URL=jdbc:postgresql://NEON_HOST:NEON_PORT/NEON_DATABASE?sslmode=require
+DATABASE_URL=jdbc:postgresql://NEON_HOST:NEON_PORT/NEON_DATABASE?sslmode=require&channel_binding=require
 DATABASE_USERNAME=NEON_USERNAME
 DATABASE_PASSWORD=NEON_PASSWORD
 FRONTEND_ORIGIN=https://YOUR-FRONTEND.vercel.app
-PORT=8081
 ```
 
-Do not commit database credentials to GitHub.
+Render supplies the `PORT` environment variable for the web service; the application uses it automatically.
 
-### 3. Deploy frontend to Vercel
-
-Import this repository into Vercel and set:
+### Vercel frontend
 
 ```text
 Root Directory: frontend
@@ -86,13 +85,13 @@ Build Command: npm run build
 Output Directory: dist
 ```
 
-Add:
+Environment variable:
 
 ```text
 VITE_API_URL=https://YOUR-RENDER-SERVICE.onrender.com/api
 ```
 
-Deploy the frontend, then copy its final URL into the Render `FRONTEND_ORIGIN` environment variable and redeploy the backend.
+Deploy the frontend, then put its final URL into Render's `FRONTEND_ORIGIN` and redeploy the backend.
 
 ## API
 
@@ -114,13 +113,18 @@ file=<pom.xml>
 GET /api/projects
 GET /api/projects/{id}
 GET /api/projects/{id}/dependencies
+GET /api/projects/{id}/dependencies/tree
+GET /api/projects/{id}/dependencies/graph
 GET /api/projects/{id}/scans
 ```
 
-## Notes
+## Safety limits
 
-The backend does not execute uploaded project code. Phase 1 accepts only a file named `pom.xml` and a small upload size. Vulnerability intelligence, transitive dependencies, Gradle, licenses, recommendations, and CI/CD integrations belong to later phases.
+By default, a scan stores at most 500 unique dependency nodes and traverses at most 20 levels deep. Set these through environment variables when needed:
 
-The application already reads database settings from `DATABASE_URL`, `DATABASE_USERNAME`, and `DATABASE_PASSWORD`, so no database-specific Java code change is required when switching hosted PostgreSQL providers.
+```text
+DEPENDENCY_SCAN_MAX_NODES=500
+DEPENDENCY_SCAN_MAX_DEPTH=20
+```
 
-Local Docker Compose continues to use a local PostgreSQL container for development; production deployment should use Neon.
+The backend does not execute uploaded project code. It accepts a small `pom.xml`, reads Maven dependency metadata, and contacts Maven Central through Maven Resolver to build the dependency graph. Later phases add vulnerability intelligence, project-specific risk, fixes, licenses, and CI/CD integrations.
