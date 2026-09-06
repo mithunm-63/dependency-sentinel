@@ -1,29 +1,27 @@
-# Dependency Sentinel — Phase 3
+# Dependency Sentinel — Phase 4
 
-Dependency Sentinel is a Java developer-security product that turns a Maven `pom.xml` into dependency intelligence: direct and transitive relationships plus known vulnerability findings for the exact versions in a scan.
+Dependency Sentinel is a Java developer-security product that turns a Maven `pom.xml` into dependency intelligence, known vulnerability findings, and actionable impact analysis.
 
-## Phase 3 flow
+## Phase 4 flow
 
 ```text
-Create project → Upload pom.xml → Resolve graph → Query OSV → Review risk and findings
+Create project → Analyze pom.xml → Resolve graph → Check OSV → Trace impact → Apply recommended fix
 ```
 
-## What Phase 3 adds
+## What Phase 4 adds
 
-- OSV.dev integration using the current `/v1/querybatch` API for Maven package/version matching
-- Vulnerability finding persistence per scan and dependency
-- OSV identifiers plus CVE aliases when available
-- Severity classification
-- CVSS vector capture when supplied by OSV
-- First listed fixed version from the affected range events
-- Vulnerability summaries/details and reference links
-- Project security score and risk label
-- Risk points weighted by severity, direct/transitive status, and dependency depth
-- Security status that degrades gracefully when OSV is temporarily unavailable
-- Security findings dashboard with filters and detail view
-- Intentionally vulnerable demo Maven file under `samples/vulnerable-pom.xml`
+- Vulnerability impact analysis against the stored dependency graph
+- Direct vs. transitive remediation context
+- Direct entry-point count for a vulnerable package
+- Upstream dependency count and blast-radius estimate
+- Dependency depth for the vulnerable package
+- Shortest dependency paths from direct dependencies to a vulnerable package
+- Plain-language explanation of why a vulnerable package is present
+- Advisory fixed-version remediation guidance when OSV provides one
+- Security-focused workspace combining inventory, tree, graph, findings, and impact in one flow
+- Automatic API-base normalization so a Vercel `VITE_API_URL` without `/api` still resolves correctly
 
-OSV documents package/version queries and the batched `/v1/querybatch` endpoint. OSV records can include aliases, summaries/details, severity, affected ranges, and references; fixed versions are represented through range events. See the official API documentation at https://google.github.io/osv.dev/api/ and https://google.github.io/osv.dev/post-v1-querybatch/.
+Phase 3 uses OSV.dev for package/version vulnerability matching. Phase 4 adds graph-aware context so a finding is not presented as an isolated CVE: the UI shows how it reaches the project and what version the advisory recommends.
 
 ## Stack
 
@@ -102,7 +100,7 @@ Environment variable:
 VITE_API_URL=https://YOUR-RENDER-SERVICE.onrender.com/api
 ```
 
-Deploy the frontend, then put its final URL into Render's `FRONTEND_ORIGIN` and redeploy the backend.
+The frontend also normalizes this setting to `/api` at runtime, so accidentally entering the Render origin without the suffix does not generate requests to the wrong endpoint.
 
 ## API
 
@@ -128,14 +126,33 @@ GET /api/projects/{id}/dependencies/tree
 GET /api/projects/{id}/dependencies/graph
 GET /api/projects/{id}/security
 GET /api/projects/{id}/vulnerabilities
+GET /api/projects/{id}/vulnerabilities/{findingId}/impact
 GET /api/projects/{id}/scans
+
+POST /api/projects/{id}/security/rescan
 ```
 
 ## Security score
 
-The Phase 3 score is intentionally explainable rather than pretending to be CVSS. Each finding contributes risk points from its OSV severity, whether the dependency is direct or transitive, and its graph depth. The project score is `100 - capped risk points`.
+The score is intentionally explainable rather than pretending to be CVSS. Each finding contributes risk points from its OSV severity, whether the dependency is direct or transitive, and its graph depth. The project score is `100 - capped risk points`.
 
-Unknown OSV severity is retained as `UNKNOWN` and receives a small baseline risk contribution rather than being silently treated as high severity.
+## Impact analysis
+
+For a selected finding, Dependency Sentinel reconstructs graph paths from direct dependencies to the affected package. The impact panel reports:
+
+```text
+Affected dependency
+Severity
+Entry points
+Upstream nodes
+Blast radius
+Dependency depth
+Why this package is present
+Shortest dependency paths
+Recommended fix
+```
+
+A fixed version is shown only when it is present in the advisory data; otherwise the product explicitly tells the user to review the advisory/vendor guidance rather than inventing a version.
 
 ## Demo vulnerable project
 
@@ -145,7 +162,7 @@ Use:
 samples/vulnerable-pom.xml
 ```
 
-The sample pins Log4j 2.14.1 so the security dashboard can demonstrate real OSV findings. OSV currently lists `org.apache.logging.log4j:log4j-core` 2.14.1 among affected versions for multiple advisories, including the critical Remote Code Injection advisory GHSA-jfh8-c2jp-5v3q. See https://osv.dev/vulnerability/GHSA-jfh8-c2jp-5v3q.
+The sample pins Log4j 2.14.1 so the security workflow can demonstrate real OSV findings.
 
 ## Safety
 
