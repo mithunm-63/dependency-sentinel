@@ -19,3 +19,6 @@ server:
 spring.servlet.multipart:
   max-file-size: 2MB
   max-request-size: 2MB
+dependency-scan:
+  max-nodes: ${DEPENDENCY_SCAN_MAX_NODES:500}
+  max-depth: ${DEPENDENCY_SCAN_MAX_DEPTH:20}
