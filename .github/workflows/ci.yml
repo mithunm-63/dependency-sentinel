@@ -20,10 +20,6 @@ jobs:
           java-version: '21'
           cache: maven
 
-      - name: Build backend
-        working-directory: backend
-        run: ./mvnw -version
-
       - name: Maven package
         working-directory: backend
         run: mvn -B -DskipTests package
