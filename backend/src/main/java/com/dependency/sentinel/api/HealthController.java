@@ -54,7 +54,7 @@ public class HealthController {
 
         return new HealthResponse(
                 project.getId(), project.getName(), healthScore, level,
-                history.size(), latest.startedAt, previous == null ? null : previous.startedAt,
+                history.size(), latest.getStartedAt(), previous == null ? null : previous.getStartedAt(),
                 changes, securityChange, highlights);
     }
 
