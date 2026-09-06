@@ -11,17 +11,17 @@ function activeProjectId() {
 
 function ensureProjectIds() {
   const buttons = [...document.querySelectorAll('.p4-project')];
-  buttons.forEach((button, index) => {
+  buttons.forEach((button) => {
     if (button.dataset.healthProjectId) button.dataset.projectId = button.dataset.healthProjectId;
-    else if (!button.dataset.projectId && buttons[index]?.dataset.healthProjectId) button.dataset.projectId = buttons[index].dataset.healthProjectId;
   });
 }
 
 function ensurePhase6Labels() {
   const phase = document.querySelector('.p4-phase');
-  if (phase) phase.innerHTML = '<span /> Phase 6';
+  if (phase && phase.textContent.trim() !== 'Phase 6') phase.innerHTML = '<span /> Phase 6';
   const footer = document.querySelector('.p4-footer');
-  if (footer && footer.textContent.includes('Phase 4')) footer.textContent = 'Phase 6 · GitHub integration & DevSecOps workflow';
+  const label = 'Phase 6 · GitHub integration & DevSecOps workflow';
+  if (footer && footer.textContent.trim() !== label) footer.textContent = label;
 }
 
 function closeModal() {
