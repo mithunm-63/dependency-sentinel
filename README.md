@@ -180,7 +180,13 @@ samples/pom.xml
 samples/vulnerable-pom.xml
 ```
 
-For scan-to-scan drift testing, any two valid Maven POM files can be uploaded. The UI accepts Maven XML filenames; the GitHub integration always supplies the fetched file to the backend as `pom.xml`.
+For scan-to-scan drift testing, any two valid Maven POM files can be uploaded. The UI accepts Maven XML filenames and normalizes them to the backend's `pom.xml` upload contract. The GitHub integration always supplies the fetched file to the backend as `pom.xml`.
+
+## Production verification
+
+Use `docs/production-smoke-test.md` after each production deployment. It covers backend health, frontend boot/CORS, project creation, Maven scanning, security findings, health comparison, GitHub scanning, deployment gates, and secret hygiene.
+
+The repository CI validates both the Java/Maven package and Vite production build on every push and pull request to `main`.
 
 ## Safety
 
