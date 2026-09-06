@@ -26,7 +26,7 @@ Store a normal Dependency Sentinel scan
 
 The UI exposes a **GitHub** control next to the existing Overview, Inventory, Tree, Graph, Security, and Health controls. It accepts a public repository URL and an optional branch. The backend only accepts HTTPS URLs hosted on `github.com`, fetches the root `pom.xml`, and passes it through the same dependency/security pipeline used for uploaded files.
 
-Example repository for testing: `https://github.com/spring-projects/spring-petclinic` on its `main` branch. The repository is a public Maven project with a root `pom.xml`. citeturn398858search0
+Example repository for testing: `https://github.com/spring-projects/spring-petclinic` on its `main` branch. The repository is a public Maven project with a root `pom.xml`.
 
 ## Earlier phases
 
