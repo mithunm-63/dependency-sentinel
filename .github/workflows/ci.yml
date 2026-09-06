@@ -1,0 +1,43 @@
+name: Dependency Sentinel CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Build backend
+        working-directory: backend
+        run: ./mvnw -version
+
+      - name: Maven package
+        working-directory: backend
+        run: mvn -B -DskipTests package
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache-dependency-path: frontend/package.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm install
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
