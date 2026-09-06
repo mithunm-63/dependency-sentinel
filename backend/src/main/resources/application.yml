@@ -22,3 +22,5 @@ spring.servlet.multipart:
 dependency-scan:
   max-nodes: ${DEPENDENCY_SCAN_MAX_NODES:500}
   max-depth: ${DEPENDENCY_SCAN_MAX_DEPTH:20}
+  security:
+    max-vulnerabilities: ${DEPENDENCY_SCAN_MAX_VULNERABILITIES:100}
