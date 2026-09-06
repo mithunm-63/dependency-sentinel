@@ -1,27 +1,26 @@
-# Dependency Sentinel — Phase 4
+# Dependency Sentinel — Phase 5
 
-Dependency Sentinel is a Java developer-security product that turns a Maven `pom.xml` into dependency intelligence, known vulnerability findings, and actionable impact analysis.
+Dependency Sentinel is a Java developer-security product that turns a Maven `pom.xml` into dependency intelligence, known vulnerability findings, actionable impact analysis, and continuous project health.
 
-## Phase 4 flow
+## Phase 5 flow
 
 ```text
-Create project → Analyze pom.xml → Resolve graph → Check OSV → Trace impact → Apply recommended fix
+Create project → Analyze pom.xml → Resolve graph → Check OSV → Trace impact → Compare scans → Track project health
 ```
 
-## What Phase 4 adds
+## What Phase 5 adds
 
-- Vulnerability impact analysis against the stored dependency graph
-- Direct vs. transitive remediation context
-- Direct entry-point count for a vulnerable package
-- Upstream dependency count and blast-radius estimate
-- Dependency depth for the vulnerable package
-- Shortest dependency paths from direct dependencies to a vulnerable package
-- Plain-language explanation of why a vulnerable package is present
-- Advisory fixed-version remediation guidance when OSV provides one
-- Security-focused workspace combining inventory, tree, graph, findings, and impact in one flow
-- Automatic API-base normalization so a Vercel `VITE_API_URL` without `/api` still resolves correctly
+- Persistent scan history for each project
+- Latest-vs-previous dependency comparison
+- Added, removed, updated, and unchanged dependency counts
+- Version/scope/directness drift detection
+- Security finding count delta and security score delta
+- Explainable project health score and health level
+- Human-readable health highlights
+- Compact Project Health workspace opened from the existing project tabs
+- Health API that reuses stored dependency snapshots instead of re-running Maven resolution
 
-Phase 3 uses OSV.dev for package/version vulnerability matching. Phase 4 adds graph-aware context so a finding is not presented as an isolated CVE: the UI shows how it reaches the project and what version the advisory recommends.
+Phase 3 uses OSV.dev for package/version vulnerability matching. Phase 4 adds graph-aware impact context. Phase 5 uses the stored scan snapshots to make changes between scans visible without adding a separate monitoring product or complicated navigation.
 
 ## Stack
 
@@ -102,6 +101,8 @@ VITE_API_URL=https://YOUR-RENDER-SERVICE.onrender.com/api
 
 The frontend also normalizes this setting to `/api` at runtime, so accidentally entering the Render origin without the suffix does not generate requests to the wrong endpoint.
 
+Deploy the frontend, then put its final URL into Render's `FRONTEND_ORIGIN` and redeploy the backend.
+
 ## API
 
 ```http
@@ -128,6 +129,7 @@ GET /api/projects/{id}/security
 GET /api/projects/{id}/vulnerabilities
 GET /api/projects/{id}/vulnerabilities/{findingId}/impact
 GET /api/projects/{id}/scans
+GET /api/projects/{id}/health
 
 POST /api/projects/{id}/security/rescan
 ```
@@ -153,6 +155,26 @@ Recommended fix
 ```
 
 A fixed version is shown only when it is present in the advisory data; otherwise the product explicitly tells the user to review the advisory/vendor guidance rather than inventing a version.
+
+## Continuous project health
+
+Phase 5 compares the newest stored dependency snapshot with the immediately previous scan:
+
+```text
+Current scan
+    ↓
+Previous scan
+    ↓
+Added / Removed / Updated / Unchanged
+    ↓
+Security finding delta
+    ↓
+Health score + highlights
+```
+
+The health score is intentionally separate from the security score. Security score reflects known vulnerability risk; health score also considers dependency churn and newly introduced vulnerability findings.
+
+The Project Health workspace is available as a **Health** control beside Overview, Inventory, Tree, Graph, and Security. It opens for the currently selected project, so users do not need a second dashboard or another project-selection workflow.
 
 ## Demo vulnerable project
 
