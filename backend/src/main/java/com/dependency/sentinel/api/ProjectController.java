@@ -5,7 +5,6 @@ import com.dependency.sentinel.dependency.DependencyEdge;
 import com.dependency.sentinel.dependency.DependencyEdgeRepository;
 import com.dependency.sentinel.dependency.ResolvedDependency;
 import com.dependency.sentinel.dependency.ResolvedDependencyRepository;
-import com.dependency.sentinel.project.Dependency;
 import com.dependency.sentinel.project.DependencyRepository;
 import com.dependency.sentinel.project.Project;
 import com.dependency.sentinel.project.ProjectRepository;
@@ -72,15 +71,13 @@ public class ProjectController {
     @GetMapping("/projects/{id}")
     public Map<String, Object> get(@PathVariable Long id) {
         Project p = findProject(id);
-        Scan latest = scans.findTopByProjectIdOrderByStartedAtDesc(id).orElse(null);
-        return details(p, latest);
+        return details(p, latestScan(id));
     }
 
     @PostMapping(value = "/projects/{id}/scan", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public Map<String, Object> scan(@PathVariable Long id, @RequestPart("file") MultipartFile file) throws Exception {
         Scan scan = scanner.scan(id, file);
-        Project p = findProject(id);
-        return details(p, scan);
+        return details(findProject(id), scan);
     }
 
     @Transactional(readOnly = true)
@@ -92,7 +89,6 @@ public class ProjectController {
         findProject(id);
         Scan latest = latestScan(id);
         if (latest == null) return List.of();
-
         String query = q == null ? "" : q.trim().toLowerCase(Locale.ROOT);
         boolean directOnly = "direct".equalsIgnoreCase(type);
         boolean transitiveOnly = "transitive".equalsIgnoreCase(type);
@@ -100,9 +96,8 @@ public class ProjectController {
         return resolvedDependencies.findByScanIdOrderByDepthAscGroupIdAscArtifactIdAsc(latest.getId()).stream()
                 .filter(d -> !directOnly || d.isDirect())
                 .filter(d -> !transitiveOnly || !d.isDirect())
-                .filter(d -> query.isBlank() ||
-                        (d.getGroupId() + ":" + d.getArtifactId() + ":" + d.getVersion())
-                                .toLowerCase(Locale.ROOT).contains(query))
+                .filter(d -> query.isBlank() || (d.getGroupId() + ":" + d.getArtifactId() + ":" + d.getVersion())
+                        .toLowerCase(Locale.ROOT).contains(query))
                 .map(ResolvedDependencySummary::new)
                 .toList();
     }
@@ -115,30 +110,25 @@ public class ProjectController {
         if (latest == null) return new DependencyTreeResponse(null, List.of());
 
         List<ResolvedDependency> nodes = resolvedDependencies.findByScanIdOrderByDepthAscGroupIdAscArtifactIdAsc(latest.getId());
-        List<DependencyEdge> graphEdges = edges.findByScanId(latest.getId());
-        Map<Long, ResolvedDependency> byId = nodes.stream()
-                .collect(Collectors.toMap(ResolvedDependency::getId, Function.identity()));
+        Map<Long, ResolvedDependency> byId = nodes.stream().collect(Collectors.toMap(ResolvedDependency::getId, Function.identity()));
         Map<Long, List<Long>> childrenByParent = new HashMap<>();
-        Set<Long> childIds = new HashSet<>();
-        for (DependencyEdge edge : graphEdges) {
+        for (DependencyEdge edge : edges.findByScanId(latest.getId())) {
             if (edge.getParent() == null || edge.getChild() == null) continue;
             Long parentId = edge.getParent().getId();
             Long childId = edge.getChild().getId();
-            if (!byId.containsKey(parentId) || !byId.containsKey(childId)) continue;
-            childrenByParent.computeIfAbsent(parentId, ignored -> new ArrayList<>()).add(childId);
-            childIds.add(childId);
+            if (byId.containsKey(parentId) && byId.containsKey(childId)) {
+                childrenByParent.computeIfAbsent(parentId, ignored -> new ArrayList<>()).add(childId);
+            }
         }
 
-        List<Long> rootIds = nodes.stream()
+        List<TreeDependency> roots = nodes.stream()
                 .filter(ResolvedDependency::isDirect)
                 .sorted(Comparator.comparing(ResolvedDependency::getGroupId)
                         .thenComparing(ResolvedDependency::getArtifactId)
                         .thenComparing(ResolvedDependency::getVersion))
                 .map(ResolvedDependency::getId)
-                .toList();
-
-        List<TreeDependency> roots = rootIds.stream()
                 .map(rootId -> buildTree(rootId, byId, childrenByParent, new HashSet<>()))
+                .filter(Objects::nonNull)
                 .toList();
         return new DependencyTreeResponse(new ScanSummary(latest), roots);
     }
@@ -151,10 +141,9 @@ public class ProjectController {
         if (latest == null) return new DependencyGraphResponse(null, List.of(), List.of());
 
         List<ResolvedDependency> nodes = resolvedDependencies.findByScanIdOrderByDepthAscGroupIdAscArtifactIdAsc(latest.getId());
-        List<DependencyEdge> graphEdges = edges.findByScanId(latest.getId());
         Set<Long> nodeIds = nodes.stream().map(ResolvedDependency::getId).collect(Collectors.toSet());
         List<GraphNode> graphNodes = nodes.stream().map(GraphNode::new).toList();
-        List<GraphEdge> graphLinks = graphEdges.stream()
+        List<GraphEdge> graphLinks = edges.findByScanId(latest.getId()).stream()
                 .filter(e -> e.getParent() != null && e.getChild() != null)
                 .filter(e -> nodeIds.contains(e.getParent().getId()) && nodeIds.contains(e.getChild().getId()))
                 .map(e -> new GraphEdge(e.getParent().getId(), e.getChild().getId()))
@@ -170,14 +159,15 @@ public class ProjectController {
     }
 
     private ProjectSummary summary(Project p) {
-        Scan latest = scans.findTopByProjectIdOrderByStartedAtDesc(p.getId()).orElse(null);
-        int count = latest == null ? (int) legacyDependencies.countByProjectId(p.getId()) : (int) resolvedDependencies.countByScanId(latest.getId());
+        Scan latest = latestScan(p.getId());
+        int count = latest == null ? (int) legacyDependencies.countByProjectId(p.getId()) :
+                (int) Math.max(latest.getNodeCount(), latest.getDependencyCount());
         return new ProjectSummary(p.getId(), p.getName(), p.getBuildTool(), count, p.getCreatedAt());
     }
 
     private Map<String, Object> details(Project p, Scan latest) {
         Map<String, Object> out = new LinkedHashMap<>();
-        int total = latest == null ? 0 : latest.getNodeCount();
+        int total = latest == null ? 0 : Math.max(latest.getNodeCount(), latest.getDependencyCount());
         out.put("id", p.getId());
         out.put("name", p.getName());
         out.put("buildTool", p.getBuildTool());
@@ -204,18 +194,17 @@ public class ProjectController {
         return projects.findById(id).orElseThrow(() -> new IllegalArgumentException("Project not found"));
     }
 
-    private TreeDependency buildTree(Long id,
-                                     Map<Long, ResolvedDependency> byId,
-                                     Map<Long, List<Long>> childrenByParent,
-                                     Set<Long> path) {
+    private TreeDependency buildTree(Long id, Map<Long, ResolvedDependency> byId,
+                                     Map<Long, List<Long>> childrenByParent, Set<Long> path) {
         ResolvedDependency node = byId.get(id);
         if (node == null) return null;
-        if (!path.add(id)) return new TreeDependency(node.getId(), node.getGroupId(), node.getArtifactId(),
-                node.getVersion(), node.getScope(), node.isDirect(), node.getDepth(), List.of());
-
+        if (!path.add(id)) {
+            return new TreeDependency(node.getId(), node.getGroupId(), node.getArtifactId(), node.getVersion(),
+                    node.getScope(), node.isDirect(), node.getDepth(), List.of());
+        }
         List<TreeDependency> children = childrenByParent.getOrDefault(id, List.of()).stream()
                 .distinct()
-                .sorted(Comparator.comparing(childId -> byId.get(childId).getGroupId())
+                .sorted(Comparator.comparing((Long childId) -> byId.get(childId).getGroupId())
                         .thenComparing(childId -> byId.get(childId).getArtifactId())
                         .thenComparing(childId -> byId.get(childId).getVersion()))
                 .map(childId -> buildTree(childId, byId, childrenByParent, new HashSet<>(path)))
