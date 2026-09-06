@@ -50,7 +50,6 @@ public class HealthController {
         SecurityChange securityChange = securityChange(latest, previous);
         int healthScore = calculateHealthScore(latest, changes, securityChange);
         String level = healthLevel(healthScore);
-
         List<String> highlights = buildHighlights(latest, previous, changes, securityChange, healthScore);
 
         return new HealthResponse(
@@ -98,7 +97,9 @@ public class HealthController {
         updated.sort(comparator);
 
         return new ChangeSet(added.size(), removed.size(), updated.size(), unchanged,
-                added.stream().limit(12).toList(), removed.stream().limit(12).toList(), updated.stream().limit(12).toList());
+                added.stream().limit(12).toList(),
+                removed.stream().limit(12).toList(),
+                updated.stream().limit(12).toList());
     }
 
     private Map<String, ResolvedDependency> dependencyMap(Long scanId) {
@@ -117,17 +118,19 @@ public class HealthController {
         int previousVulnerabilities = previous == null ? 0 : previous.getVulnerabilityCount();
         int delta = currentVulnerabilities - previousVulnerabilities;
         Integer scoreDelta = currentScore == null || previousScore == null ? null : currentScore - previousScore;
+        int previousCritical = previous == null ? 0 : previous.getCriticalCount();
         return new SecurityChange(currentVulnerabilities, previousVulnerabilities, delta,
                 latest.getCriticalCount(), latest.getHighCount(), latest.getMediumCount(), latest.getLowCount(),
-                currentScore, previousScore, scoreDelta);
+                previousCritical, currentScore, previousScore, scoreDelta);
     }
 
     private int calculateHealthScore(Scan latest, ChangeSet changes, SecurityChange security) {
         double securityScore = latest.getSecurityScore() == null ? 100 : latest.getSecurityScore();
         double driftPenalty = Math.min(15, changes.added() * 0.5 + changes.updated() * 0.25);
         double newRiskPenalty = Math.min(15, Math.max(0, security.newVulnerabilities()) * 3.0
-                + Math.max(0, security.criticalDelta()) * 5.0);
-        return (int) Math.max(0, Math.min(100, Math.round(securityScore * 0.8 + (100 - driftPenalty - newRiskPenalty) * 0.2)));
+                + Math.max(0, security.critical() - security.previousCritical()) * 5.0);
+        return (int) Math.max(0, Math.min(100,
+                Math.round(securityScore * 0.8 + (100 - driftPenalty - newRiskPenalty) * 0.2)));
     }
 
     private String healthLevel(int score) {
@@ -169,7 +172,7 @@ public class HealthController {
     }
 
     private static SecurityChange emptySecurityChange() {
-        return new SecurityChange(0, 0, 0, 0, 0, 0, 0, null, null, null);
+        return new SecurityChange(0, 0, 0, 0, 0, 0, 0, 0, null, null, null);
     }
 
     public record HealthResponse(Long projectId, String projectName, int healthScore, String healthLevel,
@@ -191,10 +194,6 @@ public class HealthController {
     }
 
     public record SecurityChange(int currentVulnerabilities, int previousVulnerabilities, int newVulnerabilities,
-                                 int critical, int high, int medium, int low,
-                                 Integer currentScore, Integer previousScore, Integer scoreDelta) {
-        int criticalDelta() {
-            return critical - (previousScore == null ? 0 : 0);
-        }
-    }
+                                 int critical, int high, int medium, int low, int previousCritical,
+                                 Integer currentScore, Integer previousScore, Integer scoreDelta) {}
 }
