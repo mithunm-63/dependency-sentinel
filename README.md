@@ -1,26 +1,41 @@
-# Dependency Sentinel — Phase 5
+# Dependency Sentinel — Phase 6
 
-Dependency Sentinel is a Java developer-security product that turns a Maven `pom.xml` into dependency intelligence, known vulnerability findings, actionable impact analysis, and continuous project health.
+Dependency Sentinel is a Java developer-security product that turns a Maven `pom.xml` into dependency intelligence, known vulnerability findings, graph-aware impact analysis, continuous project health, and a GitHub-based developer workflow.
 
-## Phase 5 flow
+## Product flow
 
 ```text
-Create project → Analyze pom.xml → Resolve graph → Check OSV → Trace impact → Compare scans → Track project health
+Create project → Analyze pom.xml → Resolve graph → Check OSV → Trace impact → Compare scans → Track health → Connect GitHub
 ```
 
-## What Phase 5 adds
+## Phase 6 — GitHub / DevSecOps
 
-- Persistent scan history for each project
-- Latest-vs-previous dependency comparison
-- Added, removed, updated, and unchanged dependency counts
-- Version/scope/directness drift detection
-- Security finding count delta and security score delta
-- Explainable project health score and health level
-- Human-readable health highlights
-- Compact Project Health workspace opened from the existing project tabs
-- Health API that reuses stored dependency snapshots instead of re-running Maven resolution
+Phase 6 adds a lightweight GitHub integration without introducing another dashboard or authentication flow:
 
-Phase 3 uses OSV.dev for package/version vulnerability matching. Phase 4 adds graph-aware impact context. Phase 5 uses the stored scan snapshots to make changes between scans visible without adding a separate monitoring product or complicated navigation.
+```text
+Public GitHub repository
+        ↓
+Resolve repository default branch (or supplied branch)
+        ↓
+Fetch root pom.xml
+        ↓
+Reuse the existing Maven + OSV pipeline
+        ↓
+Store a normal Dependency Sentinel scan
+```
+
+The UI exposes a **GitHub** control next to the existing Overview, Inventory, Tree, Graph, Security, and Health controls. It accepts a public repository URL and an optional branch. The backend only accepts HTTPS URLs hosted on `github.com`, fetches the root `pom.xml`, and passes it through the same dependency/security pipeline used for uploaded files.
+
+Example repository for testing: `https://github.com/spring-projects/spring-petclinic` on its `main` branch. The repository is a public Maven project with a root `pom.xml`. citeturn398858search0
+
+## Earlier phases
+
+- Phase 1: project onboarding and Maven scanning
+- Phase 2: direct + transitive dependency graph
+- Phase 3: OSV vulnerability intelligence and explainable security scoring
+- Phase 4: graph-aware impact analysis and remediation context
+- Phase 5: scan history, dependency drift, security movement, and project health
+- Phase 6: public GitHub repository scanning and a GitHub/DevSecOps entry point
 
 ## Stack
 
@@ -31,19 +46,6 @@ Phase 3 uses OSV.dev for package/version vulnerability matching. Phase 4 adds gr
 - Vulnerability intelligence: OSV.dev
 - Frontend: React + Vite
 - Local orchestration: Docker Compose
-
-## Local development
-
-```bash
-docker compose up --build
-cd frontend
-npm install
-npm run dev
-```
-
-Backend: `http://localhost:8081`
-Frontend: `http://localhost:5173`
-Health: `http://localhost:8081/api/health`
 
 ## Hosted deployment
 
@@ -82,8 +84,6 @@ DEPENDENCY_SCAN_MAX_DEPTH=20
 DEPENDENCY_SCAN_MAX_VULNERABILITIES=100
 ```
 
-Render supplies the `PORT` environment variable for the web service; the application uses it automatically.
-
 ### Vercel frontend
 
 ```text
@@ -98,10 +98,6 @@ Environment variable:
 ```text
 VITE_API_URL=https://YOUR-RENDER-SERVICE.onrender.com/api
 ```
-
-The frontend also normalizes this setting to `/api` at runtime, so accidentally entering the Render origin without the suffix does not generate requests to the wrong endpoint.
-
-Deploy the frontend, then put its final URL into Render's `FRONTEND_ORIGIN` and redeploy the backend.
 
 ## API
 
@@ -120,6 +116,13 @@ file=<pom.xml>
 ```
 
 ```http
+POST /api/projects/{id}/github/scan
+Content-Type: application/json
+
+{"repoUrl":"https://github.com/owner/repository","branch":"main"}
+```
+
+```http
 GET /api/projects
 GET /api/projects/{id}
 GET /api/projects/{id}/dependencies
@@ -134,13 +137,13 @@ GET /api/projects/{id}/health
 POST /api/projects/{id}/security/rescan
 ```
 
-## Security score
+## Security model
 
-The score is intentionally explainable rather than pretending to be CVSS. Each finding contributes risk points from its OSV severity, whether the dependency is direct or transitive, and its graph depth. The project score is `100 - capped risk points`.
+The security score is explainable rather than pretending to be CVSS. Each finding contributes risk points using OSV severity plus its direct/transitive position and dependency depth. The project score is `100 - capped risk points`.
 
 ## Impact analysis
 
-For a selected finding, Dependency Sentinel reconstructs graph paths from direct dependencies to the affected package. The impact panel reports:
+For a selected finding, Dependency Sentinel reconstructs dependency paths from direct entry points to the affected package and reports:
 
 ```text
 Affected dependency
@@ -154,11 +157,9 @@ Shortest dependency paths
 Recommended fix
 ```
 
-A fixed version is shown only when it is present in the advisory data; otherwise the product explicitly tells the user to review the advisory/vendor guidance rather than inventing a version.
+## Project health
 
-## Continuous project health
-
-Phase 5 compares the newest stored dependency snapshot with the immediately previous scan:
+Phase 5 compares the newest stored dependency snapshot with the previous scan:
 
 ```text
 Current scan
@@ -172,20 +173,15 @@ Security finding delta
 Health score + highlights
 ```
 
-The health score is intentionally separate from the security score. Security score reflects known vulnerability risk; health score also considers dependency churn and newly introduced vulnerability findings.
-
-The Project Health workspace is available as a **Health** control beside Overview, Inventory, Tree, Graph, and Security. It opens for the currently selected project, so users do not need a second dashboard or another project-selection workflow.
-
-## Demo vulnerable project
-
-Use:
+## Demo files
 
 ```text
+samples/pom.xml
 samples/vulnerable-pom.xml
 ```
 
-The sample pins Log4j 2.14.1 so the security workflow can demonstrate real OSV findings.
+For scan-to-scan drift testing, any two valid Maven POM files can be uploaded. The UI accepts Maven XML filenames; the GitHub integration always supplies the fetched file to the backend as `pom.xml`.
 
 ## Safety
 
-The backend does not execute uploaded project code. It reads Maven metadata, resolves dependencies from Maven Central, and queries OSV.dev for vulnerability intelligence. A scan stores at most 500 dependency nodes, traverses at most 20 levels, and fetches at most 100 unique vulnerability records by default.
+The backend never executes uploaded or fetched project code. It reads Maven metadata, resolves dependencies from Maven Central, and queries OSV.dev. GitHub integration is restricted to public repositories on `github.com`, limits the fetched POM to 2 MB, validates branch input, and reuses the existing scan limits.
