@@ -10,6 +10,8 @@ import com.dependency.sentinel.project.Project;
 import com.dependency.sentinel.project.ProjectRepository;
 import com.dependency.sentinel.project.Scan;
 import com.dependency.sentinel.project.ScanRepository;
+import com.dependency.sentinel.security.VulnerabilityFinding;
+import com.dependency.sentinel.security.VulnerabilityFindingRepository;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.MediaType;
@@ -31,19 +33,22 @@ public class ProjectController {
     private final ResolvedDependencyRepository resolvedDependencies;
     private final DependencyEdgeRepository edges;
     private final ScanRepository scans;
+    private final VulnerabilityFindingRepository findings;
     private final PomScannerService scanner;
 
     public ProjectController(ProjectRepository projects,
-                              DependencyRepository legacyDependencies,
-                              ResolvedDependencyRepository resolvedDependencies,
-                              DependencyEdgeRepository edges,
-                              ScanRepository scans,
-                              PomScannerService scanner) {
+                             DependencyRepository legacyDependencies,
+                             ResolvedDependencyRepository resolvedDependencies,
+                             DependencyEdgeRepository edges,
+                             ScanRepository scans,
+                             VulnerabilityFindingRepository findings,
+                             PomScannerService scanner) {
         this.projects = projects;
         this.legacyDependencies = legacyDependencies;
         this.resolvedDependencies = resolvedDependencies;
         this.edges = edges;
         this.scans = scans;
+        this.findings = findings;
         this.scanner = scanner;
     }
 
@@ -152,6 +157,34 @@ public class ProjectController {
     }
 
     @Transactional(readOnly = true)
+    @GetMapping("/projects/{id}/security")
+    public SecurityResponse security(@PathVariable Long id) {
+        findProject(id);
+        Scan latest = latestScan(id);
+        if (latest == null) return new SecurityResponse(null, "NOT_CHECKED", null, 0, 0, 0, 0, 0, "NOT_SCANNED", List.of());
+        List<FindingSummary> rows = findings.findByScanIdOrderByRiskScoreDescSeverityAsc(latest.getId()).stream()
+                .map(FindingSummary::new)
+                .toList();
+        return new SecurityResponse(
+                new ScanSummary(latest), latest.getSecurityStatus(), latest.getSecurityScore(), latest.getVulnerabilityCount(),
+                latest.getCriticalCount(), latest.getHighCount(), latest.getMediumCount(), latest.getLowCount(),
+                riskLabel(latest), rows);
+    }
+
+    @Transactional(readOnly = true)
+    @GetMapping("/projects/{id}/vulnerabilities")
+    public List<FindingSummary> vulnerabilities(@PathVariable Long id,
+                                                @RequestParam(required = false) String severity) {
+        findProject(id);
+        Scan latest = latestScan(id);
+        if (latest == null) return List.of();
+        return findings.findByScanIdOrderByRiskScoreDescSeverityAsc(latest.getId()).stream()
+                .filter(f -> severity == null || severity.isBlank() || severity.equalsIgnoreCase(f.getSeverity()))
+                .map(FindingSummary::new)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
     @GetMapping("/projects/{id}/scans")
     public List<ScanSummary> scans(@PathVariable Long id) {
         findProject(id);
@@ -161,7 +194,7 @@ public class ProjectController {
     private ProjectSummary summary(Project p) {
         Scan latest = latestScan(p.getId());
         int count = latest == null ? (int) legacyDependencies.countByProjectId(p.getId()) :
-                (int) Math.max(latest.getNodeCount(), latest.getDependencyCount());
+                Math.max(latest.getNodeCount(), latest.getDependencyCount());
         return new ProjectSummary(p.getId(), p.getName(), p.getBuildTool(), count, p.getCreatedAt());
     }
 
@@ -171,8 +204,13 @@ public class ProjectController {
         out.put("id", p.getId());
         out.put("name", p.getName());
         out.put("buildTool", p.getBuildTool());
-        out.put("securityScore", 100);
-        out.put("vulnerabilities", 0);
+        out.put("securityScore", latest == null ? null : latest.getSecurityScore());
+        out.put("securityStatus", latest == null ? "NOT_CHECKED" : latest.getSecurityStatus());
+        out.put("vulnerabilities", latest == null ? 0 : latest.getVulnerabilityCount());
+        out.put("critical", latest == null ? 0 : latest.getCriticalCount());
+        out.put("high", latest == null ? 0 : latest.getHighCount());
+        out.put("medium", latest == null ? 0 : latest.getMediumCount());
+        out.put("low", latest == null ? 0 : latest.getLowCount());
         out.put("outdated", 0);
         out.put("conflicts", 0);
         out.put("dependencies", total);
@@ -181,9 +219,18 @@ public class ProjectController {
         out.put("graphEdges", latest == null ? 0 : latest.getEdgeCount());
         out.put("truncated", latest != null && latest.isTruncated());
         out.put("latestScan", latest == null ? null : new ScanSummary(latest));
-        out.put("phase", "Phase 2");
-        out.put("nextStep", "Security intelligence arrives in Phase 3.");
+        out.put("phase", "Phase 3");
+        out.put("nextStep", "Impact analysis and fixes arrive in Phase 4.");
         return out;
+    }
+
+    private String riskLabel(Scan scan) {
+        if (!"CHECKED".equals(scan.getSecurityStatus()) || scan.getSecurityScore() == null) return "UNKNOWN";
+        int score = scan.getSecurityScore();
+        if (score >= 90) return "LOW_RISK";
+        if (score >= 75) return "MODERATE_RISK";
+        if (score >= 50) return "HIGH_RISK";
+        return "CRITICAL_RISK";
     }
 
     private Scan latestScan(Long projectId) {
@@ -223,11 +270,14 @@ public class ProjectController {
         }
     }
 
-    public record ScanSummary(Long id, Instant startedAt, String status, int dependencyCount,
-                              int nodeCount, int transitiveCount, int edgeCount, boolean truncated) {
+    public record ScanSummary(Long id, Instant startedAt, String status, int dependencyCount, int nodeCount,
+                              int transitiveCount, int edgeCount, boolean truncated, String securityStatus,
+                              Integer securityScore, int vulnerabilityCount, int criticalCount, int highCount,
+                              int mediumCount, int lowCount) {
         public ScanSummary(Scan s) {
             this(s.getId(), s.getStartedAt(), s.getStatus(), s.getDependencyCount(), s.getNodeCount(),
-                    s.getTransitiveCount(), s.getEdgeCount(), s.isTruncated());
+                    s.getTransitiveCount(), s.getEdgeCount(), s.isTruncated(), s.getSecurityStatus(), s.getSecurityScore(),
+                    s.getVulnerabilityCount(), s.getCriticalCount(), s.getHighCount(), s.getMediumCount(), s.getLowCount());
         }
     }
 
@@ -246,4 +296,26 @@ public class ProjectController {
     public record GraphEdge(Long parentId, Long childId) {}
 
     public record DependencyGraphResponse(ScanSummary scan, List<GraphNode> nodes, List<GraphEdge> edges) {}
+
+    public record FindingSummary(Long id, String osvId, String cve, String artifactId, String groupId, String version,
+                                 String severity, String summary, String details, String fixedVersion,
+                                 String aliases, String cvssVector, String referenceUrl, boolean direct,
+                                 int depth, int riskScore) {
+        public FindingSummary(VulnerabilityFinding f) {
+            this(f.getId(), f.getOsvId(), cveAlias(f.getAliases()), f.getDependency().getArtifactId(),
+                    f.getDependency().getGroupId(), f.getDependency().getVersion(), f.getSeverity(), f.getSummary(),
+                    f.getDetails(), f.getFixedVersion(), f.getAliases(), f.getCvssVector(), f.getReferenceUrl(),
+                    f.getDependency().isDirect(), f.getDependency().getDepth(), f.getRiskScore());
+        }
+
+        private static String cveAlias(String aliases) {
+            if (aliases == null) return null;
+            return Arrays.stream(aliases.split(",")).map(String::trim)
+                    .filter(value -> value.startsWith("CVE-")).findFirst().orElse(null);
+        }
+    }
+
+    public record SecurityResponse(ScanSummary scan, String status, Integer securityScore, int vulnerabilityCount,
+                                   int criticalCount, int highCount, int mediumCount, int lowCount,
+                                   String riskLevel, List<FindingSummary> findings) {}
 }
