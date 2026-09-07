@@ -1,5 +1,6 @@
 package com.dependency.sentinel.api;
 
+import com.dependency.sentinel.analysis.GradleBuildParser;
 import com.dependency.sentinel.analysis.PomScannerService;
 import com.dependency.sentinel.project.Scan;
 import jakarta.validation.Valid;
@@ -25,6 +26,7 @@ import java.util.Map;
 @RequestMapping("/api/projects")
 @CrossOrigin(origins = "${FRONTEND_ORIGIN:http://localhost:5173}")
 public class GitHubController {
+    private static final int MAX_BUILD_FILE_BYTES = 2_000_000;
     private final PomScannerService scanner;
     private final HttpClient httpClient;
 
@@ -48,7 +50,14 @@ public class GitHubController {
                     ? "main"
                     : validateBranch(request.branch().trim());
 
-            byte[] pom = fetchPom(repo, branch);
+            BuildFile buildFile = fetchBuildFile(repo, branch);
+            byte[] pom = switch (buildFile.type()) {
+                case "Maven" -> buildFile.content();
+                case "Gradle" -> GradleBuildParser.toSyntheticPom(new String(buildFile.content(), java.nio.charset.StandardCharsets.UTF_8))
+                        .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                default -> throw new IllegalArgumentException("Unsupported Java build file.");
+            };
+
             MultipartFile file = new ByteArrayMultipartFile("file", "pom.xml", "application/xml", pom);
             Scan scan = scanner.scan(id, file);
 
@@ -57,12 +66,14 @@ public class GitHubController {
             response.put("scanId", scan.getId());
             response.put("repository", repo.owner() + "/" + repo.repository());
             response.put("branch", branch);
-            response.put("pomUrl", "https://github.com/" + repo.owner() + "/" + repo.repository() + "/blob/" + branch + "/pom.xml");
+            response.put("buildTool", buildFile.type());
+            response.put("buildFile", buildFile.path());
+            response.put("pomUrl", "https://github.com/" + repo.owner() + "/" + repo.repository() + "/blob/" + branch + "/" + buildFile.path());
             response.put("dependencyCount", scan.getNodeCount());
             response.put("vulnerabilityCount", scan.getVulnerabilityCount());
             response.put("securityScore", scan.getSecurityScore());
             response.put("securityStatus", scan.getSecurityStatus());
-            response.put("message", "GitHub pom.xml scanned successfully.");
+            response.put("message", buildFile.type() + " project scanned successfully using " + buildFile.path() + ".");
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
             return error(HttpStatus.BAD_REQUEST, e.getMessage());
@@ -104,23 +115,34 @@ public class GitHubController {
         return branch;
     }
 
-    private byte[] fetchPom(RepoRef repo, String branch) throws Exception {
-        URI uri = URI.create("https://raw.githubusercontent.com/" + repo.owner() + "/" + repo.repository() + "/" + branch + "/pom.xml");
-        HttpRequest request = HttpRequest.newBuilder(uri)
-                .timeout(Duration.ofSeconds(20))
-                .header("User-Agent", "dependency-sentinel")
-                .GET()
-                .build();
-        HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
-        if (response.statusCode() == 404) {
-            throw new IllegalArgumentException("No pom.xml was found at branch '" + branch + "'. Enter the repository's Maven branch.");
+    private BuildFile fetchBuildFile(RepoRef repo, String branch) throws Exception {
+        String[] candidates = {"pom.xml", "build.gradle", "build.gradle.kts"};
+        StringBuilder notFound = new StringBuilder();
+        for (String candidate : candidates) {
+            URI uri = URI.create("https://raw.githubusercontent.com/" + repo.owner() + "/" + repo.repository() + "/" + branch + "/" + candidate);
+            HttpRequest request = HttpRequest.newBuilder(uri)
+                    .timeout(Duration.ofSeconds(20))
+                    .header("User-Agent", "dependency-sentinel")
+                    .GET()
+                    .build();
+            HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+            if (response.statusCode() == 200) {
+                if (response.body().length == 0) throw new IllegalArgumentException("The detected " + candidate + " is empty.");
+                if (response.body().length > MAX_BUILD_FILE_BYTES) throw new IllegalArgumentException("The detected " + candidate + " is larger than the 2 MB scan limit.");
+                String type = candidate.equals("pom.xml") ? "Maven" : "Gradle";
+                return new BuildFile(candidate, type, response.body());
+            }
+            if (response.statusCode() == 404) {
+                if (!notFound.isEmpty()) notFound.append(", ");
+                notFound.append(candidate);
+                continue;
+            }
+            if (response.statusCode() == 403) {
+                throw new IllegalStateException("GitHub denied access to the repository contents (HTTP 403). Make sure the repository is public and try again later.");
+            }
+            throw new IllegalStateException("GitHub file request failed for " + candidate + " (HTTP " + response.statusCode() + ").");
         }
-        if (response.statusCode() != 200) {
-            throw new IllegalStateException("GitHub raw file request failed (HTTP " + response.statusCode() + ").");
-        }
-        if (response.body().length == 0) throw new IllegalArgumentException("The GitHub pom.xml is empty.");
-        if (response.body().length > 2_000_000) throw new IllegalArgumentException("The GitHub pom.xml is larger than the 2 MB scan limit.");
-        return response.body();
+        throw new IllegalArgumentException("No supported Java build file was found at branch '" + branch + "'. Tried pom.xml, build.gradle, and build.gradle.kts.");
     }
 
     private ResponseEntity<Map<String, Object>> error(HttpStatus status, String message) {
@@ -136,6 +158,7 @@ public class GitHubController {
     }
 
     private record RepoRef(String owner, String repository) {}
+    private record BuildFile(String path, String type, byte[] content) {}
 
     private static final class ByteArrayMultipartFile implements MultipartFile {
         private final String name;
