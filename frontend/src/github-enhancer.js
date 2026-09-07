@@ -43,13 +43,13 @@ function openModal() {
     <div class="p6-modal" role="dialog" aria-modal="true" aria-labelledby="p6-title">
       <button class="p6-close" type="button" aria-label="Close">×</button>
       <div class="p6-kicker">PHASE 6 · GITHUB / DEVSECOPS</div>
-      <h2 id="p6-title">Scan a public GitHub repository</h2>
-      <p class="p6-subtitle">Connect a public Maven repository and Dependency Sentinel will fetch its <code>pom.xml</code>, resolve the dependency graph, and run the security check.</p>
+      <h2 id="p6-title">Scan a public Java repository</h2>
+      <p class="p6-subtitle">Dependency Sentinel automatically detects a root <code>pom.xml</code>, <code>build.gradle</code>, or <code>build.gradle.kts</code>, then resolves dependencies and checks OSV.</p>
       <label class="p6-label">GitHub repository URL</label>
       <input class="p6-input" data-repo value="" placeholder="https://github.com/owner/repository" autocomplete="url" />
       <label class="p6-label">Branch <span>(main by default)</span></label>
       <input class="p6-input" data-branch value="main" placeholder="main" autocomplete="off" />
-      <div class="p6-help">Only public GitHub repositories are supported in this phase. The repository root must contain <code>pom.xml</code>.</div>
+      <div class="p6-help">Supported root build files: <code>pom.xml</code>, <code>build.gradle</code>, and <code>build.gradle.kts</code>. Public GitHub repositories only.</div>
       <div class="p6-status" data-status hidden></div>
       <div class="p6-actions">
         <button class="p6-btn" type="button" data-cancel>Cancel</button>
@@ -78,7 +78,7 @@ function openModal() {
       return;
     }
     scanButton.disabled = true;
-    setStatus('Fetching pom.xml and running the dependency/security scan…', 'info');
+    setStatus('Detecting Java build file and running the dependency/security scan…', 'info');
     try {
       const response = await fetch(`${API}/projects/${id}/github/scan`, {
         method: 'POST',
@@ -87,7 +87,8 @@ function openModal() {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.message || 'GitHub scan failed.');
-      setStatus(`Connected ${data.repository} (${data.branch}). ${data.dependencyCount ?? 0} dependencies and ${data.vulnerabilityCount ?? 0} findings recorded.`, 'success');
+      const buildInfo = data.buildTool ? `${data.buildTool} · ${data.buildFile}` : 'Java build file';
+      setStatus(`Connected ${data.repository} (${data.branch}). ${buildInfo}. ${data.dependencyCount ?? 0} dependencies and ${data.vulnerabilityCount ?? 0} findings recorded.`, 'success');
       setTimeout(() => window.location.reload(), 900);
     } catch (error) {
       scanButton.disabled = false;
