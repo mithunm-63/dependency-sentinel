@@ -1,11 +1,11 @@
 # Dependency Sentinel — Phase 6
 
-Dependency Sentinel is a Java developer-security product that turns a Maven `pom.xml` into dependency intelligence, known vulnerability findings, graph-aware impact analysis, continuous project health, and a GitHub-based developer workflow.
+Dependency Sentinel is a Java developer-security product that turns a Java build file into dependency intelligence, known vulnerability findings, graph-aware impact analysis, continuous project health, and a GitHub-based developer workflow.
 
 ## Product flow
 
 ```text
-Create project → Analyze pom.xml → Resolve graph → Check OSV → Trace impact → Compare scans → Track health → Connect GitHub
+Create project → Analyze build file → Resolve graph → Check OSV → Trace impact → Compare scans → Track health → Connect GitHub
 ```
 
 ## Phase 6 — GitHub / DevSecOps
@@ -15,18 +15,28 @@ Phase 6 adds a lightweight GitHub integration without introducing another dashbo
 ```text
 Public GitHub repository
         ↓
-Resolve repository default branch (or supplied branch)
+Use supplied branch (main by default)
         ↓
-Fetch root pom.xml
+Auto-detect root pom.xml / build.gradle / build.gradle.kts
         ↓
-Reuse the existing Maven + OSV pipeline
+Normalize to the existing dependency-resolution pipeline
+        ↓
+Resolve graph + check OSV
         ↓
 Store a normal Dependency Sentinel scan
 ```
 
-The UI exposes a **GitHub** control next to the existing Overview, Inventory, Tree, Graph, Security, and Health controls. It accepts a public repository URL and an optional branch. The backend only accepts HTTPS URLs hosted on `github.com`, fetches the root `pom.xml`, and passes it through the same dependency/security pipeline used for uploaded files.
+The UI exposes a **GitHub** control next to the existing Overview, Inventory, Tree, Graph, Security, and Health controls. It accepts a public repository URL and an optional branch. The backend only accepts HTTPS URLs hosted on `github.com`.
 
-Example repository for testing: `https://github.com/spring-projects/spring-petclinic` on its `main` branch. The repository is a public Maven project with a root `pom.xml`.
+### Supported root build files
+
+- `pom.xml` — full Maven dependency resolution
+- `build.gradle` — common literal `group:artifact:version` dependency declarations
+- `build.gradle.kts` — common literal `group:artifact:version` dependency declarations
+
+For Gradle, Dependency Sentinel currently supports literal coordinates in common configurations such as `implementation`, `api`, `runtimeOnly`, `compileOnly`, `testImplementation`, and `testRuntimeOnly`. Version-catalog aliases, dynamically computed versions, project dependencies, and custom repository-only coordinates are reported as unsupported rather than being silently treated as complete.
+
+Example repository for Maven testing: `https://github.com/spring-projects/spring-petclinic` on its `main` branch.
 
 ## Earlier phases
 
@@ -35,7 +45,7 @@ Example repository for testing: `https://github.com/spring-projects/spring-petcl
 - Phase 3: OSV vulnerability intelligence and explainable security scoring
 - Phase 4: graph-aware impact analysis and remediation context
 - Phase 5: scan history, dependency drift, security movement, and project health
-- Phase 6: public GitHub repository scanning and a GitHub/DevSecOps entry point
+- Phase 6: public GitHub repository scanning for common Maven and Gradle Java projects
 
 ## Stack
 
@@ -122,7 +132,7 @@ Content-Type: application/json
 {"repoUrl":"https://github.com/owner/repository","branch":"main"}
 ```
 
-```http
+```text
 GET /api/projects
 GET /api/projects/{id}
 GET /api/projects/{id}/dependencies
@@ -133,7 +143,6 @@ GET /api/projects/{id}/vulnerabilities
 GET /api/projects/{id}/vulnerabilities/{findingId}/impact
 GET /api/projects/{id}/scans
 GET /api/projects/{id}/health
-
 POST /api/projects/{id}/security/rescan
 ```
 
@@ -178,9 +187,10 @@ Health score + highlights
 ```text
 samples/pom.xml
 samples/vulnerable-pom.xml
+samples/build.gradle
 ```
 
-For scan-to-scan drift testing, any two valid Maven POM files can be uploaded. The UI accepts Maven XML filenames and normalizes them to the backend's `pom.xml` upload contract. The GitHub integration always supplies the fetched file to the backend as `pom.xml`.
+For scan-to-scan drift testing, any two valid Maven POM files can be uploaded. The UI accepts Maven XML filenames and normalizes them to the backend's `pom.xml` upload contract. The GitHub integration automatically detects one of the supported root Java build files.
 
 ## Production verification
 
@@ -190,4 +200,4 @@ The repository CI validates both the Java/Maven package and Vite production buil
 
 ## Safety
 
-The backend never executes uploaded or fetched project code. It reads Maven metadata, resolves dependencies from Maven Central, and queries OSV.dev. GitHub integration is restricted to public repositories on `github.com`, limits the fetched POM to 2 MB, validates branch input, and reuses the existing scan limits.
+The backend never executes uploaded or fetched project code. It reads Maven metadata, resolves dependencies from Maven Central, and queries OSV.dev. GitHub integration is restricted to public repositories on `github.com`, limits each fetched build file to 2 MB, validates branch input, and reuses the existing scan limits.
