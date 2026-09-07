@@ -106,7 +106,7 @@ function openModal() {
 
 function ensureGitHubTab() {
   const tabs = document.querySelector('.p4-tabs');
-  if (!tabs || tabs.querySelector('[data-phase6-github]')) return;
+  if (!tabs || tabs.querySelector('[data-phase6-github]')) return true;
   const security = [...tabs.querySelectorAll('button')].find(button => button.textContent.trim() === 'Security');
   const button = document.createElement('button');
   button.type = 'button';
@@ -115,14 +115,15 @@ function ensureGitHubTab() {
   button.className = 'p6-github-tab';
   button.addEventListener('click', openModal);
   security?.insertAdjacentElement('afterend', button) || tabs.appendChild(button);
+  return true;
 }
 
-const observer = new MutationObserver(() => {
+function sync() {
   ensureProjectIds();
   ensurePhase6Labels();
   ensureGitHubTab();
-});
-observer.observe(document.body, { childList: true, subtree: true });
-ensureProjectIds();
-ensurePhase6Labels();
-ensureGitHubTab();
+}
+
+sync();
+const timer = window.setInterval(sync, 1000);
+window.addEventListener('beforeunload', () => window.clearInterval(timer), { once: true });
