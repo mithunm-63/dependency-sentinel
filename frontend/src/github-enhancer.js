@@ -11,9 +11,10 @@ function activeProjectId() {
 
 function ensureProjectIds() {
   const buttons = [...document.querySelectorAll('.p4-project')];
-  buttons.forEach((button) => {
-    const id = button.dataset.healthProjectId;
-    if (id && button.dataset.projectId !== id) button.dataset.projectId = id;
+  buttons.forEach((button, index) => {
+    if (button.dataset.healthProjectId && button.dataset.projectId !== button.dataset.healthProjectId) {
+      button.dataset.projectId = button.dataset.healthProjectId;
+    }
   });
 }
 
@@ -112,7 +113,9 @@ function openModal() {
 
 function ensureGitHubTab() {
   const tabs = document.querySelector('.p4-tabs');
-  if (!tabs || tabs.querySelector('[data-phase6-github]')) return true;
+  if (!tabs) return false;
+  if (tabs.querySelector('[data-phase6-github]')) return true;
+
   const security = [...tabs.querySelectorAll('button')].find(button => button.textContent.trim() === 'Security');
   const button = document.createElement('button');
   button.type = 'button';
@@ -120,17 +123,21 @@ function ensureGitHubTab() {
   button.dataset.phase6Github = 'true';
   button.className = 'p6-github-tab';
   button.addEventListener('click', openModal);
-  security?.insertAdjacentElement('afterend', button) || tabs.appendChild(button);
+  if (security) security.insertAdjacentElement('afterend', button);
+  else tabs.appendChild(button);
   return true;
 }
 
 function sync() {
   ensureProjectIds();
   ensurePhase6Labels();
-  ensureGitHubTab();
+  return ensureGitHubTab();
 }
 
 sync();
-window.setTimeout(sync, 250);
-window.setTimeout(sync, 750);
-window.setTimeout(sync, 1500);
+let attempts = 0;
+const poll = window.setInterval(() => {
+  attempts += 1;
+  if (sync() || attempts >= 60) window.clearInterval(poll);
+}, 500);
+window.addEventListener('beforeunload', () => window.clearInterval(poll), { once: true });
