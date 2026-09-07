@@ -55,7 +55,9 @@ function activeProjectId() {
 function ensureProjectIds() {
   const buttons = [...document.querySelectorAll('.p4-project')];
   buttons.forEach((button, index) => {
-    if (projects[index]) button.dataset.healthProjectId = String(projects[index].id);
+    if (!projects[index]) return;
+    const id = String(projects[index].id);
+    if (button.dataset.healthProjectId !== id) button.dataset.healthProjectId = id;
   });
 }
 
