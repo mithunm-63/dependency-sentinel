@@ -140,7 +140,15 @@ public class GitHubController {
             return toBuildFile(path, response.body());
         }
 
-        List<String> candidates = List.of("pom.xml", "build.gradle", "build.gradle.kts");
+        List<String> candidates = List.of(
+                "pom.xml", "build.gradle", "build.gradle.kts",
+                "backend/pom.xml", "backend/build.gradle", "backend/build.gradle.kts",
+                "app/pom.xml", "app/build.gradle", "app/build.gradle.kts",
+                "server/pom.xml", "server/build.gradle", "server/build.gradle.kts",
+                "service/pom.xml", "service/build.gradle", "service/build.gradle.kts",
+                "api/pom.xml", "api/build.gradle", "api/build.gradle.kts",
+                "java/pom.xml", "java/build.gradle", "java/build.gradle.kts"
+        );
         for (String candidate : candidates) {
             HttpResponse<byte[]> response = fetchRaw(repo, branch, candidate);
             if (response.statusCode() == 200) return toBuildFile(candidate, response.body());
@@ -152,7 +160,7 @@ public class GitHubController {
             }
         }
 
-        throw new IllegalArgumentException("No supported Java build file was found at the repository root. Enter a Build file path such as backend/pom.xml, app/build.gradle, or build.gradle.kts.");
+        throw new IllegalArgumentException("No supported Java build file was found automatically. Enter a Build file path such as backend/pom.xml, app/build.gradle, or build.gradle.kts.");
     }
 
     private String validateBuildFilePath(String path) {
