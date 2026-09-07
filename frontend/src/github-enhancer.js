@@ -43,13 +43,15 @@ function openModal() {
     <div class="p6-modal" role="dialog" aria-modal="true" aria-labelledby="p6-title">
       <button class="p6-close" type="button" aria-label="Close">×</button>
       <div class="p6-kicker">PHASE 6 · GITHUB / DEVSECOPS</div>
-      <h2 id="p6-title">Scan a public Java repository</h2>
-      <p class="p6-subtitle">Dependency Sentinel automatically detects a root <code>pom.xml</code>, <code>build.gradle</code>, or <code>build.gradle.kts</code>, then resolves dependencies and checks OSV.</p>
+      <h2 id="p6-title">Scan a Java GitHub repository</h2>
+      <p class="p6-subtitle">Dependency Sentinel detects Maven or Gradle build files and reuses the same dependency graph and OSV security pipeline.</p>
       <label class="p6-label">GitHub repository URL</label>
       <input class="p6-input" data-repo value="" placeholder="https://github.com/owner/repository" autocomplete="url" />
       <label class="p6-label">Branch <span>(main by default)</span></label>
       <input class="p6-input" data-branch value="main" placeholder="main" autocomplete="off" />
-      <div class="p6-help">Supported root build files: <code>pom.xml</code>, <code>build.gradle</code>, and <code>build.gradle.kts</code>. Public GitHub repositories only.</div>
+      <label class="p6-label">Build file path <span>(optional)</span></label>
+      <input class="p6-input" data-build-file value="" placeholder="e.g. backend/pom.xml or app/build.gradle" autocomplete="off" />
+      <div class="p6-help">Leave the path empty to try the repository root. Supported files: <code>pom.xml</code>, <code>build.gradle</code>, and <code>build.gradle.kts</code>. This also supports monorepos where the build file is inside a folder.</div>
       <div class="p6-status" data-status hidden></div>
       <div class="p6-actions">
         <button class="p6-btn" type="button" data-cancel>Cancel</button>
@@ -62,6 +64,7 @@ function openModal() {
   const scanButton = overlay.querySelector('[data-scan]');
   const repoInput = overlay.querySelector('[data-repo]');
   const branchInput = overlay.querySelector('[data-branch]');
+  const buildFileInput = overlay.querySelector('[data-build-file]');
 
   const setStatus = (message, kind = 'info') => {
     status.hidden = !message;
@@ -72,18 +75,19 @@ function openModal() {
   const scan = async () => {
     const repoUrl = repoInput.value.trim();
     const branch = branchInput.value.trim() || 'main';
+    const buildFilePath = buildFileInput.value.trim();
     if (!repoUrl) {
       setStatus('Enter a GitHub repository URL.', 'error');
       repoInput.focus();
       return;
     }
     scanButton.disabled = true;
-    setStatus('Detecting Java build file and running the dependency/security scan…', 'info');
+    setStatus('Detecting build file and running the dependency/security scan…', 'info');
     try {
       const response = await fetch(`${API}/projects/${id}/github/scan`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ repoUrl, branch })
+        body: JSON.stringify({ repoUrl, branch, buildFilePath: buildFilePath || null })
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.message || 'GitHub scan failed.');
@@ -101,6 +105,7 @@ function openModal() {
   scanButton.addEventListener('click', scan);
   repoInput.addEventListener('keydown', event => { if (event.key === 'Enter') scan(); });
   branchInput.addEventListener('keydown', event => { if (event.key === 'Enter') scan(); });
+  buildFileInput.addEventListener('keydown', event => { if (event.key === 'Enter') scan(); });
   overlay.addEventListener('click', event => { if (event.target === overlay) closeModal(); });
   repoInput.focus();
 }
@@ -126,5 +131,6 @@ function sync() {
 }
 
 sync();
-const timer = window.setInterval(sync, 1000);
-window.addEventListener('beforeunload', () => window.clearInterval(timer), { once: true });
+window.setTimeout(sync, 250);
+window.setTimeout(sync, 750);
+window.setTimeout(sync, 1500);
