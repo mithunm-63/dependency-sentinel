@@ -47,8 +47,8 @@ function openModal() {
       <p class="p6-subtitle">Connect a public Maven repository and Dependency Sentinel will fetch its <code>pom.xml</code>, resolve the dependency graph, and run the security check.</p>
       <label class="p6-label">GitHub repository URL</label>
       <input class="p6-input" data-repo value="" placeholder="https://github.com/owner/repository" autocomplete="url" />
-      <label class="p6-label">Branch <span>(leave empty for the repository default)</span></label>
-      <input class="p6-input" data-branch value="" placeholder="main" autocomplete="off" />
+      <label class="p6-label">Branch <span>(main by default)</span></label>
+      <input class="p6-input" data-branch value="main" placeholder="main" autocomplete="off" />
       <div class="p6-help">Only public GitHub repositories are supported in this phase. The repository root must contain <code>pom.xml</code>.</div>
       <div class="p6-status" data-status hidden></div>
       <div class="p6-actions">
@@ -71,7 +71,7 @@ function openModal() {
 
   const scan = async () => {
     const repoUrl = repoInput.value.trim();
-    const branch = branchInput.value.trim();
+    const branch = branchInput.value.trim() || 'main';
     if (!repoUrl) {
       setStatus('Enter a GitHub repository URL.', 'error');
       repoInput.focus();
@@ -83,7 +83,7 @@ function openModal() {
       const response = await fetch(`${API}/projects/${id}/github/scan`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ repoUrl, branch: branch || null })
+        body: JSON.stringify({ repoUrl, branch })
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.message || 'GitHub scan failed.');
