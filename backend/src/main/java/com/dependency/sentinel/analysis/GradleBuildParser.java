@@ -69,7 +69,7 @@ public final class GradleBuildParser {
             String artifact = parts[1].trim();
             String version = parts[2].trim();
             if (group.isBlank() || artifact.isBlank() || version.isBlank()) continue;
-            if (version.contains("$") || version.startsWith("libs.") || coordinate.startsWith("project(")) continue;
+            if (version.contains("$") || version.startsWith("libs.")) continue;
             result.add(new ParsedDependency(configuration, group, artifact, version));
         }
         return result;
@@ -77,7 +77,7 @@ public final class GradleBuildParser {
 
     private static String scope(String configuration) {
         return switch (configuration) {
-            case "runtimeOnly", "testRuntimeOnly" -> "runtime";
+            case "runtimeOnly" -> "runtime";
             case "compileOnly" -> "provided";
             case "testImplementation", "testRuntimeOnly" -> "test";
             default -> "compile";
@@ -87,8 +87,7 @@ public final class GradleBuildParser {
     private static String stripComments(String value) {
         return value
                 .replaceAll("(?s)/\\*.*?\\*/", "")
-                .replaceAll("(?m)^\\s*//.*$", "")
-                .replaceAll("(?m)#.*$", "");
+                .replaceAll("(?m)^\\s*//.*$", "");
     }
 
     private static String xml(String value) {
