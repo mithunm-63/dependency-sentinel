@@ -24,13 +24,14 @@
     });
 
     const phase = document.querySelector('.p4-phase');
-    if (phase && /Phase 4/.test(phase.textContent || '')) {
-      phase.innerHTML = '<span></span> Phase 5';
+    if (phase && /Phase 4|Phase 5/.test(phase.textContent || '')) {
+      phase.innerHTML = '<span></span> Phase 6';
     }
 
     const footer = document.querySelector('.p4-footer');
-    if (footer && /Phase 4/.test(footer.textContent || '')) {
-      footer.textContent = 'Phase 5 · continuous project health, scan comparison & dependency drift';
+    const label = 'Phase 6 · GitHub integration & DevSecOps workflow';
+    if (footer && /Phase 4|Phase 5/.test(footer.textContent || '') && footer.textContent !== label) {
+      footer.textContent = label;
     }
   };
 
@@ -39,7 +40,5 @@
     if (input instanceof HTMLInputElement && input.id === 'p4-pom') normalizePomInput(input);
   }, true);
 
-  const observer = new MutationObserver(patchUi);
-  observer.observe(document.body, { childList: true, subtree: true, characterData: true });
-  patchUi();
+  [0, 250, 750, 1500, 3000].forEach(delay => window.setTimeout(patchUi, delay));
 })();
