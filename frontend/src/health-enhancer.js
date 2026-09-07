@@ -131,9 +131,8 @@ function renderModal(data) {
   modal.querySelector('[data-close-health]').addEventListener('click', closeModal);
   modal.querySelector('[data-refresh-health]').addEventListener('click', async () => {
     const error = modal.querySelector('[data-health-error]');
-    const id = data.projectId;
     try {
-      const fresh = await getJson(`/projects/${id}/health`);
+      const fresh = await getJson(`/projects/${data.projectId}/health`);
       closeModal();
       renderModal(fresh);
       document.body.appendChild(modal);
@@ -185,15 +184,14 @@ function ensureHealthButton() {
 
 async function boot() {
   try { projects = await getJson('/projects'); } catch { projects = []; }
-  const observer = new MutationObserver(() => {
+  const sync = () => {
     ensureProjectIds();
     ensureHealthButton();
     promotePhaseLabel();
-  });
-  observer.observe(document.body, { childList: true, subtree: true });
-  ensureProjectIds();
-  ensureHealthButton();
-  promotePhaseLabel();
+  };
+  sync();
+  const timer = window.setInterval(sync, 1000);
+  window.addEventListener('beforeunload', () => window.clearInterval(timer), { once: true });
 }
 
 boot();
