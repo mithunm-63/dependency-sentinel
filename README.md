@@ -17,26 +17,34 @@ Public GitHub repository
         ↓
 Use supplied branch (main by default)
         ↓
-Auto-detect root pom.xml / build.gradle / build.gradle.kts
+Detect supported build file (root or supplied path)
         ↓
-Normalize to the existing dependency-resolution pipeline
+Normalize Gradle when needed and reuse the dependency-resolution pipeline
         ↓
 Resolve graph + check OSV
         ↓
 Store a normal Dependency Sentinel scan
 ```
 
-The UI exposes a **GitHub** control next to the existing Overview, Inventory, Tree, Graph, Security, and Health controls. It accepts a public repository URL and an optional branch. The backend only accepts HTTPS URLs hosted on `github.com`.
+The UI exposes a **GitHub** control next to the existing Overview, Inventory, Tree, Graph, Security, and Health controls. It accepts a public repository URL, an optional branch, and an optional build-file path. This supports normal repositories as well as monorepos where the build file lives below the repository root.
 
-### Supported root build files
+### Supported Java build files
 
 - `pom.xml` — full Maven dependency resolution
-- `build.gradle` — common literal `group:artifact:version` dependency declarations
-- `build.gradle.kts` — common literal `group:artifact:version` dependency declarations
+- `build.gradle` — common literal `group:artifact:version` dependency declarations converted to the existing Maven resolution pipeline
+- `build.gradle.kts` — common literal `group:artifact:version` dependency declarations converted to the existing Maven resolution pipeline
 
 For Gradle, Dependency Sentinel currently supports literal coordinates in common configurations such as `implementation`, `api`, `runtimeOnly`, `compileOnly`, `testImplementation`, and `testRuntimeOnly`. Version-catalog aliases, dynamically computed versions, project dependencies, and custom repository-only coordinates are reported as unsupported rather than being silently treated as complete.
 
 Example repository for Maven testing: `https://github.com/spring-projects/spring-petclinic` on its `main` branch.
+
+Example monorepo path:
+
+```text
+Repository: https://github.com/mithunm-63/dependency-sentinel
+Branch: main
+Build file path: backend/pom.xml
+```
 
 ## Earlier phases
 
@@ -129,7 +137,7 @@ file=<pom.xml>
 POST /api/projects/{id}/github/scan
 Content-Type: application/json
 
-{"repoUrl":"https://github.com/owner/repository","branch":"main"}
+{"repoUrl":"https://github.com/owner/repository","branch":"main","buildFilePath":"backend/pom.xml"}
 ```
 
 ```text
@@ -190,7 +198,7 @@ samples/vulnerable-pom.xml
 samples/build.gradle
 ```
 
-For scan-to-scan drift testing, any two valid Maven POM files can be uploaded. The UI accepts Maven XML filenames and normalizes them to the backend's `pom.xml` upload contract. The GitHub integration automatically detects one of the supported root Java build files.
+For scan-to-scan drift testing, any two valid Maven POM files can be uploaded. The GitHub integration supports root Maven/Gradle files and an optional repository-relative build-file path for monorepos.
 
 ## Production verification
 
@@ -200,4 +208,4 @@ The repository CI validates both the Java/Maven package and Vite production buil
 
 ## Safety
 
-The backend never executes uploaded or fetched project code. It reads Maven metadata, resolves dependencies from Maven Central, and queries OSV.dev. GitHub integration is restricted to public repositories on `github.com`, limits each fetched build file to 2 MB, validates branch input, and reuses the existing scan limits.
+The backend never executes uploaded or fetched project code. It reads Maven metadata, resolves dependencies from Maven Central, and queries OSV.dev. GitHub integration is restricted to public repositories on `github.com`, limits each fetched build file to 2 MB, validates branch and build-file path input, and reuses the existing scan limits.
