@@ -1,0 +1,17 @@
+plugins {
+    id 'java'
+}
+
+group = 'com.example'
+version = '1.0.0'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web:3.5.5'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa:3.5.5'
+    runtimeOnly 'org.postgresql:postgresql:42.7.7'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.13.4'
+}
