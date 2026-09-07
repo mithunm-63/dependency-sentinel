@@ -45,7 +45,7 @@ public class GitHubController {
         try {
             RepoRef repo = parseRepo(request.repoUrl());
             String branch = request.branch() == null || request.branch().isBlank()
-                    ? defaultBranch(repo)
+                    ? "main"
                     : validateBranch(request.branch().trim());
 
             byte[] pom = fetchPom(repo, branch);
@@ -104,28 +104,6 @@ public class GitHubController {
         return branch;
     }
 
-    private String defaultBranch(RepoRef repo) throws Exception {
-        URI uri = URI.create("https://api.github.com/repos/" + repo.owner() + "/" + repo.repository());
-        HttpRequest request = HttpRequest.newBuilder(uri)
-                .timeout(Duration.ofSeconds(10))
-                .header("Accept", "application/vnd.github+json")
-                .header("User-Agent", "dependency-sentinel")
-                .GET()
-                .build();
-        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-        if (response.statusCode() != 200) {
-            if (response.statusCode() == 404) throw new IllegalArgumentException("GitHub repository was not found or is private.");
-            throw new IllegalStateException("GitHub repository metadata could not be retrieved (HTTP " + response.statusCode() + ").");
-        }
-        String marker = "\"default_branch\":\"";
-        int start = response.body().indexOf(marker);
-        if (start < 0) throw new IllegalStateException("GitHub did not return a default branch.");
-        start += marker.length();
-        int end = response.body().indexOf('"', start);
-        if (end <= start) throw new IllegalStateException("GitHub returned an invalid default branch.");
-        return validateBranch(response.body().substring(start, end));
-    }
-
     private byte[] fetchPom(RepoRef repo, String branch) throws Exception {
         URI uri = URI.create("https://raw.githubusercontent.com/" + repo.owner() + "/" + repo.repository() + "/" + branch + "/pom.xml");
         HttpRequest request = HttpRequest.newBuilder(uri)
@@ -135,7 +113,7 @@ public class GitHubController {
                 .build();
         HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
         if (response.statusCode() == 404) {
-            throw new IllegalArgumentException("No pom.xml was found at that branch. Check the branch name or repository URL.");
+            throw new IllegalArgumentException("No pom.xml was found at branch '" + branch + "'. Enter the repository's Maven branch.");
         }
         if (response.statusCode() != 200) {
             throw new IllegalStateException("GitHub raw file request failed (HTTP " + response.statusCode() + ").");
