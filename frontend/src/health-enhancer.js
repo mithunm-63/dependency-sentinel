@@ -65,7 +65,7 @@ function promotePhaseLabel() {
   const pill = document.querySelector('.p4-phase');
   if (pill && pill.textContent.trim() !== 'Phase 6') pill.innerHTML = '<span /> Phase 6';
   const footer = document.querySelector('.p4-footer');
-  const footerText = 'Phase 6 · GitHub scanning, security intelligence & project health';
+  const footerText = 'Phase 6 · GitHub integration & DevSecOps workflow';
   if (footer && footer.textContent !== footerText) footer.textContent = footerText;
   const welcomeKicker = document.querySelector('.p4-welcome .p4-eyebrow');
   if (welcomeKicker && welcomeKicker.textContent.trim() !== 'PHASE 6') welcomeKicker.textContent = 'PHASE 6';
