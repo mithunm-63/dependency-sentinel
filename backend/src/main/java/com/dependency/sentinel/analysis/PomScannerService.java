@@ -67,9 +67,11 @@ public class PomScannerService {
 
     @Transactional
     public Scan scan(Long projectId, MultipartFile file) throws Exception {
-        validateFile(file);
+        BuildFileSupport.NormalizedBuildFile normalized = BuildFileSupport.normalize(file);
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new IllegalArgumentException("Project not found"));
+        project.setBuildTool(normalized.buildTool());
+        projectRepository.save(project);
 
         Scan scan = new Scan();
         scan.setProject(project);
@@ -77,7 +79,7 @@ public class PomScannerService {
         scan.setSecurityStatus("NOT_CHECKED");
         scanRepository.saveAndFlush(scan);
 
-        try (InputStream in = file.getInputStream()) {
+        try (InputStream in = normalized.file().getInputStream()) {
             Model model = new MavenXpp3Reader().read(in);
             List<org.apache.maven.model.Dependency> directDependencies = model.getDependencies();
 
@@ -267,13 +269,6 @@ public class PomScannerService {
 
     private boolean isIncomplete(org.apache.maven.model.Dependency md) {
         return md.getGroupId() == null || md.getArtifactId() == null || md.getVersion() == null || md.getVersion().isBlank();
-    }
-
-    private void validateFile(MultipartFile file) {
-        if (file == null || file.isEmpty()) throw new IllegalArgumentException("pom.xml is empty");
-        if (file.getOriginalFilename() == null || !file.getOriginalFilename().equalsIgnoreCase("pom.xml")) {
-            throw new IllegalArgumentException("Upload a file named pom.xml");
-        }
     }
 
     private String resolveProperty(String version, Model model) {
