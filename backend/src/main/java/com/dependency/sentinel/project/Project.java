@@ -19,6 +19,7 @@ public class Project {
     private List<Scan> scans = new ArrayList<>();
 
     public Long getId(){return id;} public String getName(){return name;} public void setName(String name){this.name=name;}
-    public String getBuildTool(){return buildTool;} public Instant getCreatedAt(){return createdAt;}
+    public String getBuildTool(){return buildTool;} public void setBuildTool(String buildTool){this.buildTool=buildTool;}
+    public Instant getCreatedAt(){return createdAt;}
     public List<Dependency> getDependencies(){return dependencies;} public List<Scan> getScans(){return scans;}
 }
