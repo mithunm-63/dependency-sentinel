@@ -24,6 +24,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 @RestController
@@ -69,8 +70,10 @@ public class GitHubController {
 
             MultipartFile file = new ByteArrayMultipartFile("file", "pom.xml", "application/xml", pomContent.getBytes(StandardCharsets.UTF_8));
             Scan scan = scanner.scan(id, file);
-            Project project = projectRepository.findById(id).orElseThrow(() -> new IllegalArgumentException("Project not found"));
-            project.setBuildTool(buildSystem.toUpperCase());
+            Project project = projectRepository.findById(id)
+                    .orElseThrow(() -> new IllegalArgumentException("Project not found"));
+            project.setBuildTool(buildSystem.toUpperCase(Locale.ROOT));
+            projectRepository.save(project);
 
             Map<String, Object> response = new LinkedHashMap<>();
             response.put("status", scan.getStatus());
@@ -78,7 +81,7 @@ public class GitHubController {
             response.put("repository", repo.owner() + "/" + repo.repository());
             response.put("branch", branch);
             response.put("buildSystem", buildSystem);
-            response.put("buildTool", buildSystem);
+            response.put("buildTool", buildSystem.toUpperCase(Locale.ROOT));
             response.put("buildFile", buildFile.path());
             response.put("buildFileUrl", "https://github.com/" + repo.owner() + "/" + repo.repository() + "/blob/" + branch + "/" + buildFile.path());
             response.put("dependencyCount", scan.getNodeCount());
@@ -132,7 +135,7 @@ public class GitHubController {
             String path = validateBuildFilePath(requestedPath.trim());
             HttpResponse<byte[]> response = fetchRaw(repo, branch, path);
             if (response.statusCode() == 404) {
-                throw new IllegalArgumentException("No build file was found at '" + path + "' on branch '" + branch + "'.");
+                throw new IllegalArgumentException("No supported build file was found at '" + path + "' on branch '" + branch + "'.");
             }
             if (response.statusCode() != 200) {
                 throw new IllegalStateException("GitHub file request failed for '" + path + "' (HTTP " + response.statusCode() + ").");
@@ -160,7 +163,7 @@ public class GitHubController {
             }
         }
 
-        throw new IllegalArgumentException("No supported Java build file was found automatically. Enter a Build file path such as backend/pom.xml, app/build.gradle, or build.gradle.kts.");
+        throw new IllegalArgumentException("No supported Java build file was found automatically. Add pom.xml, build.gradle, or build.gradle.kts to the repository root, or enter Build file path for a Maven/Gradle module such as backend/pom.xml.");
     }
 
     private String validateBuildFilePath(String path) {
@@ -168,11 +171,11 @@ public class GitHubController {
                 || !path.matches("[A-Za-z0-9._/-]{1,240}")) {
             throw new IllegalArgumentException("Build file path contains unsupported characters.");
         }
-        String lower = path.toLowerCase();
+        String lower = path.toLowerCase(Locale.ROOT);
         if (!(lower.endsWith("/pom.xml") || lower.equals("pom.xml")
                 || lower.endsWith("/build.gradle") || lower.equals("build.gradle")
                 || lower.endsWith("/build.gradle.kts") || lower.equals("build.gradle.kts"))) {
-            throw new IllegalArgumentException("Build file must be pom.xml, build.gradle, or build.gradle.kts.");
+            throw new IllegalArgumentException("Build file must point to pom.xml, build.gradle, or build.gradle.kts.");
         }
         return path;
     }
@@ -180,7 +183,7 @@ public class GitHubController {
     private BuildFile toBuildFile(String path, byte[] content) {
         if (content.length == 0) throw new IllegalArgumentException("The detected build file is empty.");
         if (content.length > MAX_BUILD_FILE_BYTES) throw new IllegalArgumentException("The detected build file is larger than the 2 MB scan limit.");
-        String lower = path.toLowerCase();
+        String lower = path.toLowerCase(Locale.ROOT);
         String type = lower.endsWith("pom.xml") ? "Maven" : "Gradle";
         return new BuildFile(path, type, content);
     }
